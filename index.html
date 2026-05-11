@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Revit JSON 업로더</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; background: #f5f5f5; }
+        .card { background: white; border-radius: 8px; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        h2 { color: #555; border-bottom: 2px solid #4CAF50; padding-bottom: 8px; margin-top: 0; }
+        button { padding: 12px 25px; font-size: 15px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; margin-right: 10px; }
+        button:hover { background: #45a049; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        input[type=file] { padding: 10px; background: #fafafa; border: 2px dashed #ccc; width: 100%; box-sizing: border-box; border-radius: 5px; }
+        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; max-height: 400px; font-size: 12px; }
+        .status { padding: 12px; border-radius: 5px; margin: 10px 0; font-weight: 500; }
+        .ok { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .err { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .badge { display: inline-block; padding: 3px 10px; background: #e9ecef; border-radius: 12px; font-size: 12px; margin: 2px; }
+    </style>
+</head>
+<body>
+    <h1>🏗️ Revit JSON 업로더</h1>
+    <p>Render 백엔드: <code>https://revit-llm-backend.onrender.com</code></p>
+
+    <div class="card">
+        <h2>1. JSON 파일 선택</h2>
+        <input type="file" id="fileInput" accept=".json" onchange="handleFile()">
+        <div id="preview"></div>
+    </div>
+
+    <div class="card">
+        <h2>2. 백엔드에 업로드</h2>
+        <button id="uploadBtn" onclick="upload()" disabled>업로드 시작</button>
+        <div id="uploadResult"></div>
+    </div>
+
+    <div class="card">
+        <h2>3. 업로드 후 확인</h2>
+        <button onclick="listAll()">📋 모든 프로젝트 목록</button>
+        <button onclick="getOne()">🔍 P001 상세 조회</button>
+        <pre id="checkResult"></pre>
+    </div>
+
+    <script>
+        const API = 'https://revit-llm-backend.onrender.com';
+        let loadedData = null;
+
+        function handleFile() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    loadedData = JSON.parse(e.target.result);
+                    showPreview();
+                    document.getElementById('uploadBtn').disabled = false;
+                } catch (err) {
+                    document.getElementById('preview').innerHTML = 
+                        `<div class="status err">❌ JSON 파싱 실패: ${err.message}</div>`;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function showPreview() {
+            const p = loadedData.project || {};
+            const levelCount = (loadedData.levels || []).length;
+            const elemCount = (loadedData.elements || []).length;
+            
+            document.getElementById('preview').innerHTML = `
+                <div class="status info">
+                    <strong>📋 파일 정보</strong><br>
+                    프로젝트 ID: <span class="badge">${p.project_id || 'N/A'}</span><br>
+                    이름: <span class="badge">${p.name || 'N/A'}</span><br>
+                    레벨 수: <span class="badge">${levelCount}개</span><br>
+                    요소 수: <span class="badge">${elemCount}개</span><br>
+                    내보낸 시각: <span class="badge">${loadedData.exported_at || 'N/A'}</span>
+                </div>
+            `;
+        }
+
+        async function upload() {
+            if (!loadedData) return;
+            
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.textContent = '업로드 중... (최대 1분)';
+
+            const p = loadedData.project;
+            const body = {
+                id: p.project_id,
+                project_name: p.name,
+                payload: loadedData,
+                summary: `${p.name}: ${p.level_count}개 레벨, ${p.element_count}개 요소`
+            };
+
+            try {
+                const res = await fetch(API + '/api/revit/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const result = await res.json();
+                document.getElementById('uploadResult').innerHTML = 
+                    `<div class="status ok">✅ 업로드 성공!<br><pre>${JSON.stringify(result, null, 2)}</pre></div>`;
+            } catch (e) {
+                document.getElementById('uploadResult').innerHTML = 
+                    `<div class="status err">❌ 실패: ${e.message}</div>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '업로드 시작';
+        }
+
+        async function listAll() {
+            try {
+                const res = await fetch(API + '/api/revit/data');
+                const data = await res.json();
+                document.getElementById('checkResult').textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                document.getElementById('checkResult').textContent = '에러: ' + e.message;
+            }
+        }
+
+        async function getOne() {
+            try {
+                const res = await fetch(API + '/api/revit/data/P001');
+                const data = await res.json();
+                document.getElementById('checkResult').textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                document.getElementById('checkResult').textContent = '에러: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
