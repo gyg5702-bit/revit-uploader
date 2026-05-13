@@ -1,139 +1,565 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>Revit JSON 업로더</title>
-    <style>
-        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; background: #f5f5f5; }
-        .card { background: white; border-radius: 8px; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        h2 { color: #555; border-bottom: 2px solid #4CAF50; padding-bottom: 8px; margin-top: 0; }
-        button { padding: 12px 25px; font-size: 15px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; margin-right: 10px; }
-        button:hover { background: #45a049; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        input[type=file] { padding: 10px; background: #fafafa; border: 2px dashed #ccc; width: 100%; box-sizing: border-box; border-radius: 5px; }
-        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; max-height: 400px; font-size: 12px; }
-        .status { padding: 12px; border-radius: 5px; margin: 10px 0; font-weight: 500; }
-        .ok { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .err { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        .badge { display: inline-block; padding: 3px 10px; background: #e9ecef; border-radius: 12px; font-size: 12px; margin: 2px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>배달의 철근 - Revit 데이터 업로더 v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+
+  .header {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 30px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  .header h1 { font-size: 20px; color: #333; }
+  .header .user-info { display: flex; align-items: center; gap: 15px; }
+  .header .user-info .email { color: #666; font-size: 14px; }
+  .header .user-info .badge {
+    background: #667eea;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .btn-logout {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .btn-logout:hover { background: #c0392b; }
+
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  .card h2 {
+    color: #333;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #667eea;
+    font-size: 18px;
+  }
+
+  .auth-card { max-width: 450px; margin: 60px auto; }
+  .auth-card h1 { text-align: center; color: #333; margin-bottom: 8px; font-size: 24px; }
+  .auth-card .subtitle { text-align: center; color: #888; margin-bottom: 25px; font-size: 14px; }
+
+  .auth-tabs {
+    display: flex;
+    background: #f0f0f0;
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .auth-tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 6px;
+    font-weight: 500;
+    color: #666;
+  }
+  .auth-tab.active {
+    background: white;
+    color: #333;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .form-group { margin-bottom: 15px; }
+  .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: #555;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .form-group input:focus { outline: none; border-color: #667eea; }
+
+  .btn-primary {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+
+  .file-area {
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    background: #fafafa;
+    cursor: pointer;
+    display: block;
+  }
+  .file-area:hover { border-color: #667eea; background: #f0f4ff; }
+  .file-area.has-file { border-color: #4caf50; background: #e8f5e9; }
+  .file-area input[type=file] { display: none; }
+  .file-area .icon { font-size: 40px; margin-bottom: 10px; }
+  .file-area .text { color: #666; font-size: 14px; }
+
+  .file-info {
+    background: #e8f5e9;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #2e7d32;
+  }
+
+  .btn-upload {
+    background: #4caf50;
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    width: 100%;
+    margin-top: 15px;
+  }
+  .btn-upload:hover { background: #45a049; }
+  .btn-upload:disabled { background: #ccc; cursor: not-allowed; }
+
+  .status {
+    padding: 14px 16px;
+    border-radius: 6px;
+    margin-top: 15px;
+    font-size: 14px;
+  }
+  .status.ok { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+  .status.err { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+  .status.info { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+
+  .project-list { margin-top: 15px; }
+  .project-item {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .project-item .info { flex: 1; }
+  .project-item .name { font-weight: 600; color: #333; font-size: 14px; }
+  .project-item .meta { font-size: 12px; color: #888; margin-top: 4px; }
+  .btn-delete {
+    background: #f44336;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .btn-delete:hover { background: #d32f2f; }
+
+  .empty { text-align: center; padding: 30px; color: #999; font-size: 14px; }
+
+  .hint {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 12px 16px;
+    margin-top: 15px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #856404;
+  }
+
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
-    <h1>🏗️ Revit JSON 업로더</h1>
-    <p>Render 백엔드: <code>https://revit-llm-backend.onrender.com</code></p>
 
-    <div class="card">
-        <h2>1. JSON 파일 선택</h2>
-        <input type="file" id="fileInput" accept=".json" onchange="handleFile()">
-        <div id="preview"></div>
+<div id="auth-screen" class="container">
+  <div class="card auth-card">
+    <h1>🏗️ 배달의 철근</h1>
+    <p class="subtitle">Revit 데이터 업로더 - 로그인이 필요합니다</p>
+
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')" id="tab-login">로그인</div>
+      <div class="auth-tab" onclick="switchTab('signup')" id="tab-signup">회원가입</div>
     </div>
 
-    <div class="card">
-        <h2>2. 백엔드에 업로드</h2>
-        <button id="uploadBtn" onclick="upload()" disabled>업로드 시작</button>
-        <div id="uploadResult"></div>
+    <div id="form-login">
+      <div class="form-group">
+        <label>이메일</label>
+        <input type="email" id="login-email" placeholder="test@khu.ac.kr" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>비밀번호</label>
+        <input type="password" id="login-password" placeholder="8자 이상" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="btn-login" onclick="doLogin()">로그인</button>
+      <div id="login-status"></div>
     </div>
 
-    <div class="card">
-        <h2>3. 업로드 후 확인</h2>
-        <button onclick="listAll()">📋 모든 프로젝트 목록</button>
-        <button onclick="getOne()">🔍 P001 상세 조회</button>
-        <pre id="checkResult"></pre>
+    <div id="form-signup" class="hidden">
+      <div class="form-group">
+        <label>이메일</label>
+        <input type="email" id="signup-email" placeholder="test@khu.ac.kr">
+      </div>
+      <div class="form-group">
+        <label>비밀번호 (8자 이상)</label>
+        <input type="password" id="signup-password" placeholder="비밀번호">
+      </div>
+      <div class="form-group">
+        <label>이름</label>
+        <input type="text" id="signup-name" placeholder="홍길동">
+      </div>
+      <div class="form-group">
+        <label>소속 (선택)</label>
+        <input type="text" id="signup-company" placeholder="OO대학교 / OO건설">
+      </div>
+      <button class="btn-primary" id="btn-signup" onclick="doSignup()">회원가입</button>
+      <div id="signup-status"></div>
     </div>
+  </div>
+</div>
 
-    <script>
-        const API = 'https://revit-llm-backend.onrender.com';
-        let loadedData = null;
+<div id="main-screen" class="container hidden">
 
-        function handleFile() {
-            const file = document.getElementById('fileInput').files[0];
-            if (!file) return;
+  <div class="header">
+    <h1>🏗️ 배달의 철근 - 업로더</h1>
+    <div class="user-info">
+      <span class="badge" id="user-badge">USER</span>
+      <span class="email" id="user-email">-</span>
+      <button class="btn-logout" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    loadedData = JSON.parse(e.target.result);
-                    showPreview();
-                    document.getElementById('uploadBtn').disabled = false;
-                } catch (err) {
-                    document.getElementById('preview').innerHTML = 
-                        `<div class="status err">❌ JSON 파싱 실패: ${err.message}</div>`;
-                }
-            };
-            reader.readAsText(file);
-        }
+  <div class="card">
+    <h2>📤 BIM 데이터 업로드</h2>
 
-        function showPreview() {
-            const p = loadedData.project || {};
-            const levelCount = (loadedData.levels || []).length;
-            const elemCount = (loadedData.elements || []).length;
-            
-            document.getElementById('preview').innerHTML = `
-                <div class="status info">
-                    <strong>📋 파일 정보</strong><br>
-                    프로젝트 ID: <span class="badge">${p.project_id || 'N/A'}</span><br>
-                    이름: <span class="badge">${p.name || 'N/A'}</span><br>
-                    레벨 수: <span class="badge">${levelCount}개</span><br>
-                    요소 수: <span class="badge">${elemCount}개</span><br>
-                    내보낸 시각: <span class="badge">${loadedData.exported_at || 'N/A'}</span>
-                </div>
-            `;
-        }
+    <label class="file-area" id="file-area" for="file-input">
+      <div class="icon">📁</div>
+      <div class="text">JSON 파일을 선택하세요</div>
+      <input type="file" id="file-input" accept=".json" onchange="onFileSelected(event)">
+    </label>
 
-        async function upload() {
-            if (!loadedData) return;
-            
-            const btn = document.getElementById('uploadBtn');
-            btn.disabled = true;
-            btn.textContent = '업로드 중... (최대 1분)';
+    <div id="file-info" class="file-info hidden"></div>
 
-            const p = loadedData.project;
-            const body = {
-                id: p.project_id,
-                project_name: p.name,
-                payload: loadedData,
-                summary: `${p.name}: ${p.level_count}개 레벨, ${p.element_count}개 요소`
-            };
+    <button class="btn-upload" id="btn-upload" onclick="doUpload()" disabled>
+      업로드 시작
+    </button>
 
-            try {
-                const res = await fetch(API + '/api/revit/data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                const result = await res.json();
-                document.getElementById('uploadResult').innerHTML = 
-                    `<div class="status ok">✅ 업로드 성공!<br><pre>${JSON.stringify(result, null, 2)}</pre></div>`;
-            } catch (e) {
-                document.getElementById('uploadResult').innerHTML = 
-                    `<div class="status err">❌ 실패: ${e.message}</div>`;
-            }
-            
-            btn.disabled = false;
-            btn.textContent = '업로드 시작';
-        }
+    <div id="upload-status"></div>
 
-        async function listAll() {
-            try {
-                const res = await fetch(API + '/api/revit/data');
-                const data = await res.json();
-                document.getElementById('checkResult').textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                document.getElementById('checkResult').textContent = '에러: ' + e.message;
-            }
-        }
+    <div class="hint">
+      💡 P001_export.json 같은 Revit에서 추출된 JSON 파일을 업로드하세요.
+    </div>
+  </div>
 
-        async function getOne() {
-            try {
-                const res = await fetch(API + '/api/revit/data/P001');
-                const data = await res.json();
-                document.getElementById('checkResult').textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                document.getElementById('checkResult').textContent = '에러: ' + e.message;
-            }
-        }
-    </script>
+  <div class="card">
+    <h2>📋 내 프로젝트 목록</h2>
+    <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 13px; margin-bottom: 15px;" onclick="loadProjects()">
+      🔄 목록 새로고침
+    </button>
+    <div id="project-list" class="project-list">
+      <div class="empty">로딩 중...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SERVER_URL = 'https://revit-llm-backend.onrender.com';
+const TOKEN_KEY = 'revit_uploader_token';
+const USER_KEY = 'revit_uploader_user';
+
+let currentFile = null;
+let currentUser = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) verifyToken(token);
+});
+
+async function verifyToken(token) {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      currentUser = await res.json();
+      showMainScreen();
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+    }
+  } catch (e) { console.error(e); }
+}
+
+function switchTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+  document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('form-signup').classList.toggle('hidden', tab !== 'signup');
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const statusEl = document.getElementById('login-status');
+  const btn = document.getElementById('btn-login');
+
+  if (!email || !password) {
+    showStatus(statusEl, '이메일과 비밀번호를 입력하세요.', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '로그인 중...';
+  showStatus(statusEl, '서버에 연결 중... (Sleep 시 30초 소요)', 'info');
+
+  try {
+    const res = await fetch(`${SERVER_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data));
+    currentUser = data;
+    showStatus(statusEl, '✅ 로그인 성공!', 'ok');
+    setTimeout(showMainScreen, 500);
+  } catch (err) {
+    showStatus(statusEl, `❌ ${err.message}`, 'err');
+    btn.disabled = false;
+    btn.textContent = '로그인';
+  }
+}
+
+async function doSignup() {
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const name = document.getElementById('signup-name').value.trim();
+  const company = document.getElementById('signup-company').value.trim();
+  const statusEl = document.getElementById('signup-status');
+  const btn = document.getElementById('btn-signup');
+
+  if (!email || !password) {
+    showStatus(statusEl, '이메일과 비밀번호는 필수입니다.', 'err');
+    return;
+  }
+  if (password.length < 8) {
+    showStatus(statusEl, '비밀번호는 8자 이상이어야 합니다.', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '가입 중...';
+  showStatus(statusEl, '서버에 연결 중...', 'info');
+
+  try {
+    const res = await fetch(`${SERVER_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name, company })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data));
+    currentUser = data;
+    showStatus(statusEl, '✅ 회원가입 + 로그인 성공!', 'ok');
+    setTimeout(showMainScreen, 500);
+  } catch (err) {
+    showStatus(statusEl, `❌ ${err.message}`, 'err');
+    btn.disabled = false;
+    btn.textContent = '회원가입';
+  }
+}
+
+function doLogout() {
+  if (!confirm('로그아웃 하시겠습니까?')) return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  currentUser = null;
+  currentFile = null;
+  document.getElementById('main-screen').classList.add('hidden');
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+}
+
+function showMainScreen() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.remove('hidden');
+  document.getElementById('user-email').textContent = currentUser.email;
+  document.getElementById('user-badge').textContent = currentUser.name || 'USER';
+  loadProjects();
+}
+
+function onFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  currentFile = file;
+  const fileInfo = document.getElementById('file-info');
+  fileInfo.classList.remove('hidden');
+  fileInfo.innerHTML = `📄 <strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB)<br><small>업로드 준비 완료</small>`;
+  document.getElementById('file-area').classList.add('has-file');
+  document.getElementById('btn-upload').disabled = false;
+}
+
+async function doUpload() {
+  if (!currentFile) return;
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) { alert('로그인이 필요합니다.'); return; }
+
+  const statusEl = document.getElementById('upload-status');
+  const btn = document.getElementById('btn-upload');
+  btn.disabled = true;
+  btn.textContent = '업로드 중...';
+  showStatus(statusEl, '파일 읽는 중...', 'info');
+
+  try {
+    const text = await currentFile.text();
+    const payload = JSON.parse(text);
+    const projectId = (payload.project || {}).project_id || payload.id || currentFile.name.replace('.json', '');
+    const projectName = (payload.project || {}).name || projectId;
+
+    showStatus(statusEl, '서버로 전송 중...', 'info');
+
+    const res = await fetch(`${SERVER_URL}/api/revit/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        id: projectId,
+        project_name: projectName,
+        payload: payload,
+        summary: `${projectName} (${currentFile.name})`
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+    }
+
+    const result = await res.json();
+    showStatus(statusEl, `✅ 업로드 성공!<br><small>프로젝트 ID: <strong>${result.project_id}</strong><br>부재 수: <strong>${result.element_count}개</strong></small>`, 'ok');
+
+    currentFile = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-info').classList.add('hidden');
+    document.getElementById('file-area').classList.remove('has-file');
+    setTimeout(loadProjects, 500);
+  } catch (err) {
+    showStatus(statusEl, `❌ ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '업로드 시작';
+  }
+}
+
+async function loadProjects() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return;
+  const listEl = document.getElementById('project-list');
+  listEl.innerHTML = '<div class="empty">로딩 중...</div>';
+
+  try {
+    const res = await fetch(`${SERVER_URL}/api/revit/data`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      if (res.status === 401) { doLogout(); return; }
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const projects = await res.json();
+    if (projects.length === 0) {
+      listEl.innerHTML = '<div class="empty">아직 업로드한 프로젝트가 없습니다.</div>';
+      return;
+    }
+    listEl.innerHTML = projects.map(p => `
+      <div class="project-item">
+        <div class="info">
+          <div class="name">${escapeHtml(p.project_name)}</div>
+          <div class="meta">ID: <strong>${escapeHtml(p.project_id)}</strong> · 부재 <strong>${p.element_count || 0}개</strong> · 층 <strong>${p.level_count || 0}개</strong> · 발주 <strong>${p.order_count || 0}건</strong></div>
+        </div>
+        <button class="btn-delete" onclick="deleteProject('${escapeHtml(p.project_id)}')">🗑️ 삭제</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    listEl.innerHTML = `<div class="empty">목록을 불러올 수 없습니다: ${err.message}</div>`;
+  }
+}
+
+async function deleteProject(projectId) {
+  if (!confirm(`정말 ${projectId}를 삭제하시겠습니까?`)) return;
+  const token = localStorage.getItem(TOKEN_KEY);
+  try {
+    const res = await fetch(`${SERVER_URL}/api/revit/data/${encodeURIComponent(projectId)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    loadProjects();
+  } catch (err) {
+    alert(`삭제 실패: ${err.message}`);
+  }
+}
+
+function showStatus(el, msg, type) {
+  el.className = `status ${type}`;
+  el.innerHTML = msg;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
 </body>
 </html>
